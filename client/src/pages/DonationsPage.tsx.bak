@@ -1,0 +1,1005 @@
+import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue 
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PawPrint, MapPin, Plus, Eye, Heart, Gift, DollarSign, ArrowLeft, Image, X } from "lucide-react";
+import NativeBottomNavigation from "@/components/mobile/NativeBottomNavigation";
+import AdoptionChatModal from "@/components/modals/AdoptionChatModal";
+
+// Definindo a interface para os pets
+interface Pet {
+  id: number;
+  name: string;
+  species: string;
+  size: string;
+  age: string;
+  location: string;
+  description: string;
+  status: string;
+  contactPhone: string;
+  image?: string;
+}
+
+// Definindo a interface para os itens de doação
+interface DonationItem {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  distance: string;
+  donorName: string;
+  type: string;
+}
+
+export default function DonationsPage() {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("pets");
+  const [donationFormOpen, setDonationFormOpen] = useState(false);
+  const [itemDonationFormOpen, setItemDonationFormOpen] = useState(false);
+  const [itemRequestFormOpen, setItemRequestFormOpen] = useState(false);
+  const [chatModalOpen, setChatModalOpen] = useState(false);
+  const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
+  const [selectedItem, setSelectedItem] = useState<DonationItem | null>(null);
+  const [, navigate] = useLocation();
+  
+  // Para o upload de imagens no mesmo formato dos posts
+  const [petPhotoPreview, setPetPhotoPreview] = useState<string | null>(null);
+  const [selectedPetPhoto, setSelectedPetPhoto] = useState<File | null>(null);
+  const petPhotoInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estado para armazenar os posts de pets carregados da API
+  const [petPosts, setPetPosts] = useState<any[]>([]);
+  
+  // Carregar posts de pets do tipo 'pet-donation' ao montar o componente
+  useEffect(() => {
+    // Função para buscar posts de pets
+    const fetchPetPosts = async () => {
+      try {
+        // Buscar todos os posts
+        const response = await fetch('/api/posts');
+        
+        if (!response.ok) {
+          throw new Error('Falha ao carregar posts de pets');
+        }
+        
+        const data = await response.json();
+        
+        // Filtrar apenas os posts do tipo 'pet-donation'
+        const petDonationPosts = data.filter((post: any) => post.postType === 'pet-donation');
+        
+        // Atualizar o estado com os posts filtrados
+        setPetPosts(petDonationPosts);
+      } catch (error) {
+        console.error('Erro ao carregar posts de pets:', error);
+      }
+    };
+    
+    fetchPetPosts();
+  }, []);
+  
+  // Manipular seleção de foto do pet
+  const handlePetPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Verificar tamanho (10MB máx como nos posts)
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "Arquivo muito grande",
+          description: "O tamanho máximo de imagem é 10MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Verificar tipo
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Formato não suportado",
+          description: "Por favor, selecione apenas imagens",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Salvar arquivo e criar preview
+      setSelectedPetPhoto(file);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPetPhotoPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Remover foto selecionada
+  const removePetPhoto = () => {
+    setSelectedPetPhoto(null);
+    setPetPhotoPreview(null);
+    if (petPhotoInputRef.current) {
+      petPhotoInputRef.current.value = '';
+    }
+  };
+  
+  // Lista de pets para doação
+  const [petsList, setPetsList] = useState<Pet[]>([
+    {
+      id: 1,
+      name: "Thor",
+      species: "Cachorro",
+      size: "Médio",
+      age: "Filhote",
+      location: "Zona Sul",
+      description: "Filhote dócil e brincalhão, vacinado e vermifugado.",
+      status: "Disponível",
+      contactPhone: "5511999999999",
+      image: "https://images.unsplash.com/photo-1587300003388-59208cc962cb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1770&q=80"
+    },
+    {
+      id: 2,
+      name: "Luna",
+      species: "Gato",
+      size: "Pequeno",
+      age: "Adulto",
+      location: "Zona Oeste",
+      description: "Gata calma e carinhosa, castrada e vacinada.",
+      status: "Disponível",
+      contactPhone: "5511988888888",
+      image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1686&q=80"
+    },
+    {
+      id: 3,
+      name: "Max",
+      species: "Cachorro",
+      size: "Grande",
+      age: "Adulto",
+      location: "Zona Norte",
+      description: "Cachorro protetor e amigável, ideal para casas com quintal.",
+      status: "Disponível",
+      contactPhone: "5511977777777",
+      image: "https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1612&q=80"
+    }
+  ]);
+  
+  // Mock para dados de itens para doação
+  const donationItems: DonationItem[] = [
+    {
+      id: 1,
+      title: "Ração para gatos filhotes",
+      description: "Tenho 3 pacotes de ração para gatos filhotes que sobraram depois que meu gatinho cresceu.",
+      location: "Bairro Centro",
+      distance: "3,2 km",
+      donorName: "Maria S.",
+      type: "Doação"
+    },
+    {
+      id: 2,
+      title: "Coleira e peitoral para cachorro porte médio",
+      description: "Coleira em ótimo estado, praticamente nova. Meu cachorro cresceu e não serve mais.",
+      location: "Jardim Paulista",
+      distance: "1,5 km",
+      donorName: "Carlos M.",
+      type: "Doação"
+    },
+    {
+      id: 3,
+      title: "Cama para gatos",
+      description: "Cama para gatos em formato de casinha, lavada e em ótimo estado.",
+      location: "Vila Mariana",
+      distance: "4,8 km",
+      donorName: "Ana P.",
+      type: "Doação"
+    }
+  ];
+  
+  const viewPetDetails = (pet: Pet) => {
+    navigate(`/pet-details/${pet.id}`);
+  };
+  
+  const handleAdoptPet = (pet: Pet) => {
+    // Abrir modal de chat para adoção
+    setSelectedPet(pet);
+    setSelectedItem(null);
+    setChatModalOpen(true);
+  };
+  
+  const handleItemInterest = (item: DonationItem) => {
+    // Abrir modal de chat para interesse no item
+    setSelectedItem(item);
+    setSelectedPet(null);
+    setChatModalOpen(true);
+  };
+  
+  // Hook de mensagens já definido no início do componente
+
+  const handleDonateClick = () => {
+    // Agora usamos o componente de doação com interface moderna em vez do prompt
+    navigate("/checkout");
+  };
+
+  return (
+    <div className="pb-16">
+      <div className="container mx-auto p-4">
+        <div className="mb-6 text-center">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#CE97E8] to-[#0BDEC2]">Doações</h1>
+          <p className="text-neutral-600 mt-2 max-w-2xl mx-auto">
+            Ajude nossos amiguinhos com adoção ou itens de necessidade 💖
+          </p>
+        </div>
+
+        {/* Card de doação monetária - estilo moderno */}
+        <Card className="mb-8 overflow-hidden border-0 shadow-lg rounded-xl transform transition-all hover:scale-[1.01]">
+          <CardContent className="p-0">
+            <div className="bg-gradient-to-r from-[#CE97E8]/20 to-[#0BDEC2]/20 p-6">
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                <div className="bg-white rounded-full p-5 shadow-md flex items-center justify-center">
+                  <Heart className="h-12 w-12 text-pink-500" fill="#F5821D" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-semibold mb-3 text-center md:text-left">Ajude com carinho 💖</h2>
+                  <p className="text-neutral-700 mb-5 text-center md:text-left">
+                    Cada doação faz uma enorme diferença para nossos amiguinhos de patas! 
+                    Escolha um valor e ajude a transformar a vida de um animal hoje mesmo.
+                  </p>
+                  <div className="flex flex-col space-y-5">
+                    <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                      <Button 
+                        variant="outline" 
+                        className="rounded-full border-2 border-pink-400 hover:bg-pink-100 hover:border-pink-500 px-6 py-5 text-lg font-medium transition-all" 
+                        onClick={() => navigate("/checkout?amount=2000")}
+                      >
+                        R$ 20
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="rounded-full border-2 border-pink-400 hover:bg-pink-100 hover:border-pink-500 px-6 py-5 text-lg font-medium transition-all" 
+                        onClick={() => navigate("/checkout?amount=5000")}
+                      >
+                        R$ 50
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="rounded-full border-2 border-pink-400 hover:bg-pink-100 hover:border-pink-500 px-6 py-5 text-lg font-medium transition-all" 
+                        onClick={() => navigate("/checkout?amount=10000")}
+                      >
+                        R$ 100
+                      </Button>
+                    </div>
+                    
+                    <div className="flex space-x-3 items-center">
+                      <div className="relative flex-1">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 text-lg font-bold">R$</span>
+                        <Input 
+                          type="number"
+                          min="1"
+                          placeholder="Digite um valor personalizado"
+                          className="pl-12 py-6 text-lg rounded-xl border-2 focus:border-[#F5821D] transition-all" 
+                          id="customDonationAmount"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (!isNaN(Number(value)) && Number(value) > 0) {
+                              // Armazena na variável local - não precisa de state
+                              (document.getElementById("customDonationAmount") as HTMLInputElement).dataset.value = value;
+                            }
+                          }}
+                        />
+                      </div>
+                      <Button 
+                        className="gap-2 bg-gradient-to-r from-[#F5821D] to-[#F5821D]/80 hover:from-[#F5821D]/90 hover:to-[#F5821D]/70 px-6 py-6 rounded-xl text-lg font-medium transition-all"
+                        onClick={() => {
+                          const input = document.getElementById("customDonationAmount") as HTMLInputElement;
+                          const value = input.value;
+                          
+                          if (value && !isNaN(Number(value)) && Number(value) > 0) {
+                            // Converte para centavos (multiplicando por 100)
+                            const amountInCents = Math.round(Number(value) * 100);
+                            navigate(`/checkout?amount=${amountInCents}`);
+                          } else {
+                            toast({
+                              title: "Valor inválido",
+                              description: "Por favor, digite um valor válido maior que zero.",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                      >
+                        <DollarSign className="h-5 w-5" /> Doar agora
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tabs para escolher entre pets e itens - Design moderno */}
+        <Tabs defaultValue={activeTab} className="w-full" onValueChange={setActiveTab}>
+          <TabsList className="flex w-full mb-6 p-1 bg-gradient-to-r from-[#CE97E8]/20 to-[#0BDEC2]/20 rounded-2xl">
+            <TabsTrigger 
+              value="pets" 
+              className="flex-1 py-3 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#CE97E8] data-[state=active]:to-[#F5821D] data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <span className="material-icons text-sm">pets</span>
+                <span>Pets para Adoção</span>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="items" 
+              className="flex-1 py-3 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F5821D] data-[state=active]:to-[#CE97E8] data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <span className="material-icons text-sm">inventory_2</span>
+                <span>Itens para Doação</span>
+              </div>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab de pets para adoção */}
+          <TabsContent value="pets" className="space-y-4">
+            <div className="bg-[#CE97E8]/10 p-4 rounded-lg mb-6">
+              <h2 className="font-semibold text-lg mb-2 flex items-center">
+                <PawPrint className="h-5 w-5 mr-2 text-[#CE97E8]" />
+                Animais para adoção responsável
+              </h2>
+              <p className="text-sm text-neutral-700 mb-3">
+                Encontre pets que precisam de um novo lar ou cadastre um animal para doação.
+              </p>
+              
+              {/* Botão para cadastrar pet para doação */}
+              <Dialog open={donationFormOpen} onOpenChange={setDonationFormOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full bg-secondary hover:bg-secondary/90">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Cadastrar pet para doação
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Cadastrar pet para doação</DialogTitle>
+                    <DialogDescription>
+                      Preencha todos os campos obrigatórios para cadastrar um pet para adoção.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    
+                    // Get form data
+                    const formData = new FormData(e.currentTarget);
+                    
+                    // Create FormData for multipart upload (como no sistema de posts)
+                    const uploadData = new FormData();
+                    uploadData.append('name', formData.get('petName') as string);
+                    uploadData.append('type', formData.get('petSpecies') as string);
+                    uploadData.append('size', formData.get('petSize') as string);
+                    uploadData.append('age', formData.get('petAge') as string);
+                    uploadData.append('location', formData.get('petLocation') as string);
+                    uploadData.append('description', formData.get('petDescription') as string);
+                    uploadData.append('contactPhone', formData.get('contactPhone') as string);
+                    uploadData.append('status', 'Disponível');
+                    
+                    // Add pet photo if available - usa o mesmo campo 'media' dos posts
+                    const photoInput = document.getElementById('petPhoto') as HTMLInputElement;
+                    if (photoInput && photoInput.files && photoInput.files[0]) {
+                      uploadData.append('media', photoInput.files[0]);
+                    }
+                    
+                    // Submit to API - usando a API de posts para armazenar no mesmo local
+                    // Adiciona um campo de tipo para identificar que é um post de pet para doação
+                    uploadData.append('postType', 'pet-donation');
+                    uploadData.append('content', formData.get('petDescription') as string);
+                    
+                    fetch('/api/posts', {
+                      method: 'POST',
+                      body: uploadData,
+                      credentials: 'include'
+                    })
+                    .then(response => {
+                      if (!response.ok) {
+                        throw new Error('Falha ao cadastrar pet para doação');
+                      }
+                      return response.json();
+                    })
+                    .then(data => {
+                      toast({
+                        title: "Pet cadastrado com sucesso!",
+                        description: "Seu pet foi cadastrado para doação.",
+                      });
+                      
+                      // Fecha o modal após cadastro bem-sucedido
+                      setDonationFormOpen(false);
+                      
+                      // Cria um novo pet baseado nos dados do formulário
+                      const newPet = {
+                        id: data.id || Date.now(),
+                        name: formData.get('petName') as string,
+                        species: formData.get('petSpecies') === 'dog' ? 'Cachorro' : 
+                                formData.get('petSpecies') === 'cat' ? 'Gato' : 'Outro',
+                        size: formData.get('petSize') === 'small' ? 'Pequeno' : 
+                              formData.get('petSize') === 'medium' ? 'Médio' : 'Grande',
+                        age: formData.get('petAge') === 'puppy' ? 'Filhote' : 
+                             formData.get('petAge') === 'adult' ? 'Adulto' : 'Idoso',
+                        location: formData.get('petLocation') as string,
+                        description: formData.get('petDescription') as string,
+                        status: 'Disponível',
+                        contactPhone: formData.get('contactPhone') as string,
+                        // Usa a URL da imagem retornada pelo servidor (mesma do sistema de posts)
+                        image: data.mediaUrls && data.mediaUrls.length > 0 ? data.mediaUrls[0] : 
+                               data.photos && data.photos.length > 0 ? data.photos[0] : null
+                      };
+                      
+                      // Adiciona o novo pet à lista existente
+                      const updatedPets = [newPet, ...petsList];
+                      
+                      // Atualiza a lista para exibir abaixo do botão
+                      setPetsList(updatedPets);
+                    })
+                    .catch(error => {
+                      console.error("Erro ao cadastrar pet:", error);
+                      toast({
+                        title: "Erro",
+                        description: "Não foi possível cadastrar o pet. Tente novamente.",
+                        variant: "destructive"
+                      });
+                    });
+                  }} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="petName">Nome do pet *</Label>
+                        <Input id="petName" name="petName" placeholder="Ex: Thor" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="petSpecies">Espécie *</Label>
+                        <Select name="petSpecies" defaultValue="dog">
+                          <SelectTrigger id="petSpecies">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="dog">Cachorro</SelectItem>
+                            <SelectItem value="cat">Gato</SelectItem>
+                            <SelectItem value="other">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="petSize">Porte *</Label>
+                        <Select name="petSize" defaultValue="medium">
+                          <SelectTrigger id="petSize">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="small">Pequeno</SelectItem>
+                            <SelectItem value="medium">Médio</SelectItem>
+                            <SelectItem value="large">Grande</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="petAge">Idade *</Label>
+                        <Select name="petAge" defaultValue="puppy">
+                          <SelectTrigger id="petAge">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="puppy">Filhote</SelectItem>
+                            <SelectItem value="adult">Adulto</SelectItem>
+                            <SelectItem value="senior">Idoso</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="petLocation">Localização *</Label>
+                      <Input 
+                        id="petLocation" 
+                        name="petLocation"
+                        placeholder="Ex: Zona Sul" 
+                        required 
+                      />
+                    </div>
+                    
+
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="petDescription">Descrição *</Label>
+                      <Textarea 
+                        id="petDescription" 
+                        name="petDescription"
+                        placeholder="Descreva características do pet, temperamento, vacinas, etc."
+                        required
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="petPhoto">Imagem do pet</Label>
+                      <div 
+                        className="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center cursor-pointer hover:bg-neutral-50 transition-colors"
+                        onClick={() => petPhotoInputRef.current?.click()}
+                      >
+                        {!petPhotoPreview ? (
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <PawPrint className="h-10 w-10 text-neutral-400" />
+                            <p className="text-sm text-neutral-500">
+                              Clique para adicionar uma foto do pet
+                            </p>
+                            <p className="text-xs text-neutral-400">
+                              Formatos suportados: JPG, PNG, WEBP (Máx. 10MB)
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="relative h-40 w-full overflow-hidden rounded-md">
+                            <img 
+                              src={petPhotoPreview} 
+                              alt="Preview" 
+                              className="h-full w-full object-cover" 
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removePetPhoto();
+                              }}
+                              className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5 text-white hover:bg-black/90"
+                              aria-label="Remover imagem"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                        
+                        <Input 
+                          id="petPhoto" 
+                          name="petPhoto" 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handlePetPhotoSelect}
+                          ref={petPhotoInputRef}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="contactPhone">Telefone para contato *</Label>
+                      <Input 
+                        id="contactPhone" 
+                        name="contactPhone"
+                        placeholder="Ex: 11999999999 (apenas números)" 
+                        required 
+                      />
+                    </div>
+                  
+                    <div className="flex flex-col sm:flex-row justify-between sm:justify-end gap-2 mt-4">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full sm:w-auto"
+                        onClick={() => setDonationFormOpen(false)}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Voltar
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-pink-500 hover:bg-pink-600 w-full sm:w-auto"
+                      >
+                        Cadastrar
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            
+            {/* Lista de pets para adoção */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Usar os posts de tipo pet-donation para renderizar os pets */}
+              {petPosts.length > 0 ? (
+                petPosts.map((post) => {
+                  // Criar um objeto pet baseado no post
+                  const pet: Pet = {
+                    id: post.id,
+                    name: post.name || 'Pet para adoção',
+                    species: post.type || 'Não especificado',
+                    size: post.size || 'Médio',
+                    age: post.age || 'Não especificado',
+                    location: post.location || 'Localização não informada',
+                    description: post.content || post.description || '',
+                    status: 'Disponível',
+                    contactPhone: post.contactPhone || '',
+                    // Usar a primeira imagem do post como imagem do pet
+                    image: post.mediaUrls?.[0] || post.imageUrl || null
+                  };
+                  
+                  return (
+                    <Card key={pet.id} className="overflow-hidden shadow-sm border-0">
+                      <CardContent className="p-0">
+                        {/* Imagem do pet - clicável para ver detalhes */}
+                        <div 
+                          className="h-48 bg-neutral-200 overflow-hidden cursor-pointer"
+                          onClick={() => viewPetDetails(pet)}
+                        >
+                          {pet.image ? (
+                            <img 
+                              src={pet.image} 
+                              alt={pet.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <PawPrint className="h-12 w-12 text-neutral-400" />
+                            </div>
+                          )}
+                        </div>
+                  )
+                })
+              ) : (
+                // Caso não haja posts de pets, mostrar os pets demo
+                petsList.map((pet) => (
+                  <Card key={pet.id} className="overflow-hidden shadow-sm border-0">
+                    <CardContent className="p-0">
+                      {/* Imagem do pet - clicável para ver detalhes */}
+                      <div 
+                        className="h-48 bg-neutral-200 overflow-hidden cursor-pointer"
+                        onClick={() => viewPetDetails(pet)}
+                      >
+                        {pet.image ? (
+                          <img 
+                            src={pet.image} 
+                            alt={pet.name} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <PawPrint className="h-12 w-12 text-neutral-400" />
+                          </div>
+                        )}
+                      </div>
+                    
+                    {/* Informações do pet */}
+                    <div className="p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold">{pet.name}</h3>
+                        <Badge variant="outline" className="bg-pink-50 text-pink-700 border-pink-300">
+                          {pet.species}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center text-sm text-neutral-500 mb-2">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        <span>{pet.location}</span>
+                      </div>
+                      
+                      <p className="text-neutral-600 text-sm mb-4 line-clamp-2">
+                        {pet.description}
+                      </p>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        <Button 
+                          variant="outline"
+                          className="text-[#CE97E8] border-[#CE97E8]/30 hover:bg-[#0BDEC2]/10 hover:border-[#0BDEC2]/30 w-full sm:w-auto"
+                          onClick={() => viewPetDetails(pet)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Ver detalhes
+                        </Button>
+                        <Button 
+                          className="bg-[#F5821D] hover:bg-[#F5821D]/90 w-full sm:w-auto"
+                          onClick={() => handleAdoptPet(pet)}
+                        >
+                          <Heart className="h-4 w-4 mr-2" />
+                          Quero adotar
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Tab de itens para doação */}
+          <TabsContent value="items" className="space-y-4">
+            <div className="bg-gradient-to-r from-[#F5821D]/10 to-[#CE97E8]/10 p-6 rounded-xl mb-6 border border-[#CE97E8]/20 shadow-sm">
+              <h2 className="font-semibold text-xl mb-3 flex items-center text-[#F5821D]">
+                <Gift className="h-6 w-6 mr-2" />
+                Itens para doação ou solicitação
+              </h2>
+              <p className="text-gray-700 mb-4">
+                Doe ração, medicamentos, acessórios ou solicite itens necessários para cuidar de animais.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Dialog open={itemDonationFormOpen} onOpenChange={setItemDonationFormOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary hover:bg-primary/90">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Oferecer doação
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Cadastrar item para doação</DialogTitle>
+                      <DialogDescription>
+                        Preencha todos os campos obrigatórios para cadastrar um item para doação.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="itemTitle">Título *</Label>
+                        <Input id="itemTitle" placeholder="Ex: Ração para gatos filhotes" required />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="itemCategory">Categoria *</Label>
+                        <Select defaultValue="food">
+                          <SelectTrigger id="itemCategory">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="food">Alimentação</SelectItem>
+                            <SelectItem value="medicine">Medicamentos</SelectItem>
+                            <SelectItem value="accessories">Acessórios</SelectItem>
+                            <SelectItem value="hygiene">Higiene</SelectItem>
+                            <SelectItem value="other">Outros</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="itemDescription">Descrição *</Label>
+                        <Textarea 
+                          id="itemDescription" 
+                          placeholder="Descreva o item, quantidade, estado de conservação, etc."
+                          required
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="itemLocation">Localização *</Label>
+                        <Input 
+                          id="itemLocation" 
+                          placeholder="Ex: Bairro Centro" 
+                          required 
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="contactInfo">Telefone para contato *</Label>
+                        <Input 
+                          id="contactInfo" 
+                          placeholder="Ex: 11999999999 (apenas números)" 
+                          required 
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="itemPhoto">Imagem do item</Label>
+                        <div className="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center cursor-pointer hover:bg-neutral-50 transition-colors">
+                          <Input id="itemPhoto" type="file" accept="image/*" className="hidden" />
+                          <div className="flex flex-col items-center">
+                            <span className="material-icons text-3xl text-neutral-400">cloud_upload</span>
+                            <p className="text-sm text-neutral-500 mt-2">
+                              Arraste e solte uma imagem ou clique para fazer upload
+                            </p>
+                            <p className="text-xs text-neutral-400 mt-1">
+                              JPG, PNG ou GIF até 5MB
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-between sm:justify-end gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full sm:w-auto"
+                        onClick={() => setItemDonationFormOpen(false)}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Voltar
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+                      >
+                        Cadastrar
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
+                <Dialog open={itemRequestFormOpen} onOpenChange={setItemRequestFormOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary hover:bg-primary/90">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Solicitar item
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Solicitar item</DialogTitle>
+                      <DialogDescription>
+                        Descreva o item que você precisa para cuidar de um animal.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="requestTitle">Título da solicitação *</Label>
+                        <Input id="requestTitle" placeholder="Ex: Ração para gato filhote" required />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="requestCategory">Categoria *</Label>
+                        <Select defaultValue="food">
+                          <SelectTrigger id="requestCategory">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="food">Alimentação</SelectItem>
+                            <SelectItem value="medicine">Medicamentos</SelectItem>
+                            <SelectItem value="accessories">Acessórios</SelectItem>
+                            <SelectItem value="hygiene">Higiene</SelectItem>
+                            <SelectItem value="other">Outros</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="requestDescription">Descrição detalhada *</Label>
+                        <Textarea 
+                          id="requestDescription" 
+                          placeholder="Descreva com detalhes o que você precisa, quantidade, marca preferida, etc."
+                          required
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="requestReason">Motivo da solicitação</Label>
+                        <Textarea 
+                          id="requestReason" 
+                          placeholder="Explique por que você precisa deste item (opcional)"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="requestLocation">Sua localização *</Label>
+                        <Input 
+                          id="requestLocation" 
+                          placeholder="Ex: Bairro Jardins" 
+                          required 
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="requestPhone">Telefone para contato *</Label>
+                        <Input 
+                          id="requestPhone" 
+                          placeholder="Ex: 11999999999 (apenas números)" 
+                          required 
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-between sm:justify-end gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full sm:w-auto"
+                        onClick={() => setItemRequestFormOpen(false)}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Voltar
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+                      >
+                        Solicitar
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+            
+            {/* Lista de itens para doação */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {donationItems.map((item) => (
+                <Card key={item.id} className="overflow-hidden border-0 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl hover:translate-y-[-2px] group">
+                  <CardContent className="p-0">
+                    <div className="relative h-10 bg-gradient-to-r from-[#CE97E8] to-[#F5821D] flex items-center">
+                      <div className="absolute top-0 right-0 mt-1.5 mr-3">
+                        <Badge className="bg-white text-[#F5821D] hover:bg-white border-0 shadow-sm font-medium py-1">
+                          {item.type}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="p-5">
+                      <h3 className="font-bold text-lg text-gray-800 mb-3 group-hover:text-[#F5821D] transition-colors">{item.title}</h3>
+                      
+                      <div className="flex items-center text-gray-500 mb-3 text-sm">
+                        <div className="flex items-center mr-4">
+                          <MapPin className="h-4 w-4 mr-1 text-[#CE97E8]" />
+                          <span>{item.location}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="material-icons text-xs mr-1 text-[#F5821D]">directions_car</span>
+                          <span>{item.distance}</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-600 mb-4 line-clamp-3">
+                        {item.description}
+                      </p>
+                      
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#CE97E8] to-[#F5821D] flex items-center justify-center text-white font-bold mr-2">
+                            {item.donorName.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium">{item.donorName}</span>
+                        </div>
+                        
+                        <Button 
+                          className="rounded-xl shadow-sm bg-gradient-to-r from-[#F5821D] to-[#CE97E8] hover:from-[#F5821D]/90 hover:to-[#CE97E8]/90 transition-colors"
+                          onClick={() => handleItemInterest(item)}
+                        >
+                          <span className="material-icons text-sm mr-1">chat</span>
+                          Interesse
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+      
+      <NativeBottomNavigation />
+      
+      {/* Modal de Chat para Adoção/Interesse */}
+      {chatModalOpen && (
+        <AdoptionChatModal
+          isOpen={chatModalOpen}
+          onClose={() => setChatModalOpen(false)}
+          targetUser={{
+            id: selectedPet ? 1 : selectedItem ? 2 : 0, // ID do dono do pet/item (exemplo)
+            name: selectedPet ? "Dono do " + selectedPet.name : 
+                 selectedItem ? "Doador do " + selectedItem.title : "Usuário"
+          }}
+          pet={selectedPet || undefined}
+          item={selectedItem || undefined}
+        />
+      )}
+    </div>
+  );
+}

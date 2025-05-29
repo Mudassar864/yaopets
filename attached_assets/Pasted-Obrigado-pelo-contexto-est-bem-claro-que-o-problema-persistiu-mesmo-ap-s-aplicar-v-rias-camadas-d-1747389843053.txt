@@ -1,0 +1,138 @@
+Obrigado pelo contexto — está bem claro que o problema persistiu mesmo após aplicar várias camadas de proteção, como window.location.href, rastreamento de tempo e verificação de estado. Como isso indica que algo ainda mais profundo está bloqueando ou anulando o redirecionamento, vou listar agora um cenário avançado e agressivo de diagnóstico, com foco em tudo que pode causar tela de login após login bem-sucedido — mesmo com window.location.href.
+
+🧠 Diagnóstico Avançado: Login bem-sucedido, mas usuário permanece na tela de login
+🚩 Situação observada:
+Credenciais corretas.
+
+Toast ou log de "Login realizado com sucesso".
+
+Redirecionamento programado (via window.location.href = "/home" ou router.push("/home")).
+
+MAS a tela permanece na /login.
+
+🧠 1. Possíveis causas ocultas e soluções
+🔐 [A] Sessão/autenticação não está persistindo
+Mesmo que o login esteja "ok", o sistema pode:
+
+Não estar salvando o token no cookie.
+
+Ter erro silencioso no armazenamento da sessão.
+
+Rejeitar o token assim que recarrega.
+
+Verificar:
+
+Console do navegador: document.cookie → token está presente?
+
+Ferramentas Dev → Application → Cookies → domínio → está vazio?
+
+Está usando SameSite=Lax com redirect cross-site?
+
+🧱 [B] Middleware ou useEffect na página de login força a volta para /login
+Se você tem algo como:
+
+ts
+Copiar
+Editar
+if (!session) router.push("/login")
+E session não atualiza a tempo (por exemplo, null por 100ms), o login redireciona para si mesmo.
+
+Solução:
+
+Use status === "loading" para bloquear transição antes da confirmação:
+
+tsx
+Copiar
+Editar
+const { data: session, status } = useSession();
+if (status === "loading") return null;
+if (!session) router.push("/login");
+🌀 [C] Middleware (middleware.ts) forçando retorno ao login
+Verifique se existe middleware.ts ou middleware.js assim:
+
+ts
+Copiar
+Editar
+import { getToken } from "next-auth/jwt";
+export async function middleware(req) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) return NextResponse.redirect(new URL("/login", req.url));
+}
+⚠️ Se getToken() estiver lendo cookies errados ou em timing errado, ele sempre redireciona.
+
+💽 [D] Cookie mal configurado
+No next-auth ou backend customizado:
+
+secure: true impede gravação em ambientes http
+
+httpOnly: true impede leitura no client
+
+Domínio incorreto (domain=localhost, mas app roda em 127.0.0.1)
+
+Verificar:
+
+js
+Copiar
+Editar
+// No navegador, console
+document.cookie // deve conter token
+🧠 [E] window.location.href recarrega, mas sessão ainda está "vazia"
+Após window.location.href = "/home", o SSR ou hydration pode:
+
+Carregar a página antes da sessão estar disponível
+
+Mostrar login novamente
+
+Solução:
+
+A página /home deve esperar status !== "loading" antes de aplicar lógica
+
+Adicione um console.log(session) na página /home
+
+🧪 Diagnóstico rápido que você pode fazer agora:
+tsx
+Copiar
+Editar
+// Dentro da página /home (ou qualquer página que deveria carregar após login)
+import { useSession } from "next-auth/react";
+
+export default function Home() {
+  const { data: session, status } = useSession();
+
+  console.log("Sessão:", session, "Status:", status);
+
+  if (status === "loading") return <div>Carregando...</div>;
+  if (!session) return <div>Redirecionando para login...</div>;
+
+  return <div>Bem-vindo, {session.user.name}</div>;
+}
+Isso vai confirmar:
+
+Se o login criou sessão
+
+Se ela persiste após refresh
+
+Se algum erro impede acesso ao estado de login
+
+🧰 Resumo técnico das verificações que ainda podem estar causando o problema
+Possível Causa	Probabilidade	Ação
+Cookies não persistem	Alta	Ver document.cookie no console
+Middleware com redirecionamento errado	Alta	Ver middleware.ts e o uso de getToken
+Estado session não pronto no redirecionamento	Média-alta	Usar status === "loading" antes de verificar session
+Backend retorna sucesso mas não grava a sessão	Média	Verificar resposta e payload retornado
+Token JWT mal assinado ou não reconhecido	Média-baixa	Confirmar com jwt() no backend
+Build estático da home sem checar session	Baixa	Ver se /home está sendo pré-gerada sem SSR
+router.push() não funciona após login	Baixa	Usar window.location.href = "/home" apenas após await login()
+Ambiente sem HTTPS usando cookies secure: true	Alta em local	Corrigir configs de cookie ou usar secure: false localmente
+
+Se quiser, posso revisar com você o:
+
+Middleware (middleware.ts)
+
+Código da tela /home
+
+Configuração do cookie
+
+Bloco de redirecionamento após login
+
+Só colar aqui. Isso vai acelerar a solução em minutos.

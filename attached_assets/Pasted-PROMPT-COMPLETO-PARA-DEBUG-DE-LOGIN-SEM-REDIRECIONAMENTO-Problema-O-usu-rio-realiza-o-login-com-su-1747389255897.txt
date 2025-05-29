@@ -1,0 +1,155 @@
+PROMPT COMPLETO PARA DEBUG DE LOGIN SEM REDIRECIONAMENTO
+Problema:
+
+O usuário realiza o login com sucesso, a mensagem "Login realizado com sucesso" aparece, mas não é redirecionado para a home (/home). Fica travado ou volta para login.
+
+✅ CHECKLIST GERAL DE DIAGNÓSTICO (COM 100% E 1% DE PROBABILIDADE)
+🔁 1. O estado de autenticação está sincronizado?
+ O session (ex: do next-auth) está realmente sendo atualizado?
+
+ O estado global de authContext está disponível na página seguinte?
+
+ Algum setState está ocorrendo depois do router.push, o que cancela o efeito?
+
+ Há await faltando em algum signIn() ou setSession()?
+
+📦 2. O botão de login chama o router.push no momento certo?
+ Está usando signIn(..., { redirect: false }) + router.push() manual?
+
+ O router.push está realmente sendo executado? (adicionar console.log("vai redirecionar") antes)
+
+ Há setTimeout() ou setTimeout(0) que está atrasando ou bugando o push?
+
+ O botão está com loading infinito e impedindo ações subsequentes?
+
+🌐 3. A rota /home realmente existe e está acessível?
+ O caminho /home está disponível dentro de /pages/home.tsx ou /app/home/page.tsx?
+
+ A página /home dá erro 404 ao acessar diretamente?
+
+ Está usando basePath customizado no next.config.js?
+
+ Está em ambiente de build (next build) com arquivos ausentes?
+
+🔁 4. Redirecionamento cíclico acontecendo logo após login
+ Existe algum useEffect(() => { if (!session) router.push('/login') })?
+
+ Esse useEffect é executado antes de session estar de fato pronto?
+
+ Há session === undefined sendo tratado como not authenticated?
+
+🧱 5. Middleware (middleware.ts) bloqueando rota após login
+ Há verificação de !token ou !session que redireciona para /login?
+
+ Middleware está sendo aplicado em matcher genérico tipo ["/((?!api|_next).*)"]?
+
+ Está usando next-auth e getToken() com atraso na atualização?
+
+🔐 6. next-auth ou sistema similar mal configurado
+ Está usando o signIn() com redirect: false mas esqueceu o router.push?
+
+ Configurou pages: { signIn: '/login' } mas não pages: { signIn: '/login', callbackUrl: '/home' }?
+
+ Callback URL foi ignorada ou sobrescrita?
+
+ Sessão do usuário não está persistindo no cookie (secure: true em ambiente local http)?
+
+ jwt() ou session() no next-auth não estão retornando os dados corretamente?
+
+⚙️ 7. O router.push() pode estar falhando silenciosamente
+ Está usando o router.push() antes do estado de login concluir?
+
+ Está chamando router.push('/home') dentro de um useEffect mal ordenado?
+
+ Há erro silencioso dentro de try { ... } catch {} sem console.error()?
+
+ router.push() foi chamado mas página não mudou (verifique console de rede)?
+
+📡 8. Backend não está salvando corretamente o usuário/autenticação
+ O usuário existe no banco após registro?
+
+ Há delay entre registro → autenticação que causa inconsistência?
+
+ Backend responde com status 200 mas com success: false no corpo?
+
+ fetch("/api/auth") retorna sessão válida após login?
+
+🎭 9. Há renderização condicional com checagem incorreta
+ A página /home depende de user, mas user vem como null inicialmente e redireciona?
+
+ Há SSR com getServerSideProps que bloqueia se session não estiver pronta?
+
+ Página /home está protegida por withAuth() ou requireAuth() sem fallback?
+
+📁 10. Estrutura de pastas está separando layout/app de forma inesperada
+ Está usando /app e /pages ao mesmo tempo?
+
+ Login está em um layout e home está em outro? Layouts diferentes podem resetar contexto.
+
+ layout.tsx de /app não mantém estado ao navegar entre as rotas?
+
+💾 11. O banco de dados foi criado corretamente?
+ A collection de usuários (users) está criada?
+
+ Há schema mal definido (ex: unique: true em email, mas tentativa de duplicação)?
+
+ Conexão com o banco não está retornando erro 500 mas também não está salvando?
+
+ createUser() salva, mas não retorna o ID ou token?
+
+🪄 12. Transição entre páginas não está definida ou foi quebrada
+ Há animações de rota (ex: framer motion, AnimatePresence) que estão com timeout travado?
+
+ Há Suspense com fallback travado ou mal implementado?
+
+ router.events.on("routeChangeComplete") nunca é disparado?
+
+🧼 13. Código está funcionando, mas o cache está atrapalhando
+ Cache local ou do navegador interferindo (session antiga)?
+
+ Algum localStorage ou sessionStorage mantém user=null e trava?
+
+ Componente AuthProvider depende de localStorage e não detecta mudança?
+
+🔎 14. O toast de sucesso não significa sucesso real
+ O toast.success("Login feito!") aparece antes de o login ser validado?
+
+ Foi colocado antes do await signIn()?
+
+ Está usando res.ok sem verificar res.error?
+
+📡 15. Comunicação com API ou back-end com problemas
+ A resposta da API de login está vazia ou incompleta?
+
+ Resposta de login está com status 200 mas sem atualizar cookies?
+
+ Está usando fetch em lugar errado? Ex: login do lado cliente chama rota protegida?
+
+🌍 16. Ambiente de produção vs. local com comportamento diferente
+ Em produção, a URL base está diferente? (BASE_URL, NEXTAUTH_URL)?
+
+ Em produção, cookies SameSite ou secure impedem persistência?
+
+🔧 17. Build quebrado ou client side rendering falho
+ Em SSR/SSG a rota /home não está sendo gerada?
+
+ Tem erro no console client-side mas não afeta a API?
+
+✅ INSTRUÇÃO FINAL
+Por favor, revise todos os pontos acima e forneça:
+
+Logs do console após o login
+
+Resposta completa da API de login
+
+Código da função de login (frontend e backend, se houver)
+
+Código da página /home (ou redirecionamento)
+
+Middleware (se existir)
+
+Configuração de next-auth ou autenticação customizada
+
+Se quiser, posso montar um esqueleto mínimo funcional de um sistema de login + redirecionamento com next-auth, router.push, useSession e middleware funcionando corretamente para comparação.
+
+Só pedir.

@@ -1,0 +1,72 @@
+Se após todas essas melhorias o sistema fica preso em “Criando conta…”, isso indica que o handleSubmit ou a função createUser não está finalizando corretamente, ou a promessa (Promise) não está resolvendo/rejeitando. Vamos direto ao ponto:
+
+🔎 Possíveis causas do carregamento infinito (com base no print)
+1. A requisição de criação de conta nunca finaliza (problema no back-end ou fetch)
+Se a função que chama a API (fetch, axios, etc.) não retorna nada ou trava, o botão nunca sai de "Criando conta...".
+
+✅ Verifique o console do navegador (F12) → aba "Network":
+
+A requisição /api/register aparece?
+
+Ela está pendente indefinidamente?
+
+Ela retorna erro 500, 400 ou timeout?
+
+⚠️ Se ficar pendente para sempre, revise se o await dentro da API ou rota de registro está travando ou esperando algo que nunca chega (como uma conexão com o banco de dados mal configurada).
+
+2. O estado loading nunca é alterado de volta para false
+Se você usa algo assim no front-end:
+
+tsx
+Copiar
+Editar
+setIsLoading(true);
+try {
+  const res = await fetch('/api/register', { ... });
+  const data = await res.json();
+
+  if (res.ok) {
+    toast.success("Conta criada");
+    router.push('/home');
+  } else {
+    toast.error(data.message);
+  }
+} catch (err) {
+  toast.error("Erro inesperado");
+} finally {
+  setIsLoading(false); // <-- pode estar faltando isso
+}
+✅ Certifique-se de que sempre há um setIsLoading(false) no finally, senão o botão fica preso em modo "loading".
+
+3. Erro silencioso na API ou falta de return response.json()
+Na rota da API (ex: pages/api/register.ts), certifique-se de que há return res.status(...).json(...) SEMPRE, mesmo em erros.
+
+ts
+Copiar
+Editar
+export default async function handler(req, res) {
+  try {
+    // lógica...
+    return res.status(200).json({ user: newUser });
+  } catch (e) {
+    console.error("Erro no register:", e);
+    return res.status(500).json({ message: "Erro interno" }); // nunca deixe sem resposta
+  }
+}
+✅ Checklist rápido para resolver:
+Verificação	Descrição	OK?
+🔁 fetch/axios retorna resposta?	Veja na aba Network do navegador	
+⛔ API /api/register dá erro 500 ou 400?	Cheque console e network	
+❌ setIsLoading(false) está no finally?	Garante que loading pare sempre	
+🧪 Teste manual com curl ou Postman	Veja se o back responde corretamente	
+🔄 A rota /home existe e carrega normalmente?	Teste digitando na URL	
+
+Se quiser, envie aqui:
+
+O código do handleSubmit ou handleRegister
+
+O conteúdo da rota /api/register ou função responsável
+
+Print ou log do erro no console do navegador ou terminal
+
+Com isso consigo te dar o diagnóstico exato.

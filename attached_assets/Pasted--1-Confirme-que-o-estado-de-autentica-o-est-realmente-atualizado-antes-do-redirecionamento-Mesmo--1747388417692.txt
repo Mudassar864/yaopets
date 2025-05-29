@@ -1,0 +1,81 @@
+ 1. Confirme que o estado de autenticação está realmente atualizado antes do redirecionamento
+Mesmo com setTimeout, se o setState (como setUser() ou setIsAuthenticated()) estiver fora de sincronia com o router.push(), o redirecionamento pode falhar silenciosamente.
+
+🔧 Solução sugerida:
+Garanta que o estado esteja confirmado antes do redirecionamento:
+
+tsx
+Copiar
+Editar
+// Exemplo: login.tsx
+const handleLogin = async () => {
+  const res = await fetch('/api/login', { ... });
+  const data = await res.json();
+
+  if (res.ok) {
+    setAuthState(data.user); // ou setUser(data.user)
+    toast.success('Login realizado com sucesso');
+
+    // Aguarde a confirmação do estado antes do push
+    setTimeout(() => {
+      router.push('/home');
+    }, 500); // ou use um hook/useEffect baseado na mudança do estado
+  } else {
+    toast.error('Erro ao fazer login');
+  }
+};
+✅ 2. O redirecionamento acontece mas é bloqueado pelo useEffect de "proteção"
+Você pode estar com um useEffect no /home tipo:
+
+tsx
+Copiar
+Editar
+useEffect(() => {
+  if (!isAuthenticated) {
+    router.push('/login');
+  }
+}, []);
+Nesse caso, o isAuthenticated pode ainda estar false por 1ms — e te joga de volta para o login, mesmo após redirecionar.
+
+🔧 Corrija com:
+
+tsx
+Copiar
+Editar
+useEffect(() => {
+  if (isAuthenticated === false) {
+    router.push('/login');
+  }
+}, [isAuthenticated]);
+Ou evite rodar router.push() até a autenticação ter sido claramente determinada (não undefined).
+
+✅ 3. Verifique se o router.push está mesmo sendo chamado
+Use console.log logo antes do redirecionamento:
+
+tsx
+Copiar
+Editar
+console.log('Autenticado, redirecionando...');
+router.push('/home');
+Se você vê esse log mas não muda a rota, o problema pode ser:
+
+Falha no router.push (não deve ser await router.push(...))
+
+Middleware (ex: Next.js middleware) interferindo
+
+Rota /home não existe ou tem erro de render
+
+✅ 4. Confirme se /home existe e está acessível
+Às vezes a rota existe mas falha silenciosamente (ex: erro no componente da página /home).
+
+🔧 Tente acessar manualmente: http://localhost:3000/home. Veja se carrega ou dá erro.
+
+✅ 5. Logging detalhado
+Como você já adicionou logs, envie aqui:
+
+Logs do console (navegador)
+
+Logs do terminal (back-end se aplicável)
+
+Print ou texto da função handleLogin e do AuthProvider se estiver usando Context
+

@@ -1,0 +1,114 @@
+ Conclusão: você está preso em um ciclo clássico de autenticação "fantasma"
+Isso acontece quando:
+
+O servidor cria a sessão/token com sucesso
+
+Mas o cliente não consegue acessá-la (por cookie, storage ou contexto)
+
+E ao recarregar a página, a verificação detecta “usuário não autenticado” → volta para /login
+
+✅ Diagnóstico final com quase 100% de chance de identificar o problema:
+🧪 Verificação 1 — Token realmente foi armazenado no navegador?
+Abra o DevTools → aba “Application” → “Cookies”
+
+Olhe os cookies no domínio da aplicação
+
+Você deve ver algo como:
+
+lua
+Copiar
+Editar
+next-auth.session-token
+ou
+__Secure-next-auth.session-token
+Se não aparecer nenhum desses:
+
+O navegador não está aceitando o cookie de sessão.
+
+🧪 Verificação 2 — O cookie está sendo bloqueado silenciosamente?
+Se estiver rodando localhost ou 127.0.0.1, mas a configuração do cookie está assim:
+
+js
+Copiar
+Editar
+cookies: {
+  sessionToken: {
+    name: "__Secure-next-auth.session-token",
+    options: {
+      httpOnly: true,
+      secure: true, // <- esse aqui bloqueia em HTTP!
+      sameSite: "lax",
+    },
+  },
+}
+⚠️ Isso NÃO funciona em ambiente local com HTTP (apenas HTTPS).
+
+Solução:
+No next-auth ou backend, garanta:
+
+ts
+Copiar
+Editar
+secure: process.env.NODE_ENV === "production"
+🧪 Verificação 3 — Middleware sempre redireciona de volta pro login?
+Se tiver middleware.ts assim:
+
+ts
+Copiar
+Editar
+export async function middleware(req) {
+  const token = await getToken({ req, secret: process.env.SECRET });
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+}
+E getToken() não encontra o cookie, então o usuário sempre é chutado pra /login, mesmo após autenticação bem-sucedida.
+
+Testes:
+
+Comente esse middleware temporariamente e veja se o login te leva para /home
+
+Se funcionar, é 100% erro de cookie/token não sendo lido
+
+🧪 Verificação 4 — Página de login ou home tem um useEffect que redireciona errado?
+tsx
+Copiar
+Editar
+useEffect(() => {
+  if (!session && status !== "loading") {
+    router.push("/login");
+  }
+}, [session, status]);
+Se session estiver momentaneamente null ou undefined após o login, esse redirecionamento acontece antes do estado se estabilizar.
+
+Solução:
+
+tsx
+Copiar
+Editar
+if (status === "loading") return null;
+if (!session) {
+  router.push("/login");
+  return null;
+}
+🧪 Verificação 5 — Frontend e backend estão em domínios diferentes?
+Se você roda:
+
+frontend em localhost:3000
+
+backend em localhost:5000
+
+Mas não configurou corretamente CORS e credentials: "include" nas fetch/axios, os cookies não são gravados.
+
+✅ Resumo de ações práticas agora:
+Verifique se o cookie de sessão foi gravado após login.
+
+Confirme se a flag secure está desabilitada em ambiente de dev (HTTPS).
+
+Teste comentar o middleware.ts inteiro — se o login funcionar, o problema é nele.
+
+Logue o session na página /home e na /login para entender o estado real.
+
+Coloque status === "loading" como condição de bloqueio do redirecionamento.
+
+Evite usar __Secure- como prefixo em cookies em localhost.

@@ -1,0 +1,132 @@
+Objetivo geral:
+
+Transformar o app atual em uma versão minimalista, funcional e preparada para monetização, chamada YaoPets.
+
+
+---
+
+1. Primeiras Interações e Navegação
+
+Defina a página de login como a primeira tela do app, antes de qualquer conteúdo.
+
+Remova completamente o botão flutuante roxo com o ícone de '+', localizado no canto inferior direito, incluindo o comportamento associado a ele.
+
+Substitua o ícone de perfil (canto superior direito) por uma foto de perfil do usuário.
+
+Ao clicar, exibir um menu suspenso com:
+
+Termos de uso
+
+Política de privacidade
+
+Troca de idioma
+
+Sair (logout)
+
+
+
+
+
+---
+
+2. Conteúdo e Funcionalidades
+
+Renomear o app para "YaoPets", com atualização visual no título e ícone do app.
+
+Adicionar stories (semelhante ao Instagram) na aba “lifestyle” para aumentar engajamento.
+
+Implementar um sistema de mensagens diretas (chat entre usuários) com organização por tópicos/pets.
+
+Criar um ecossistema de anúncios com sistema de boost em qualquer parte do app (feeds, stories, perfis).
+
+Criar uma página para gerenciamento de anúncios, incluindo:
+
+Criar anúncio
+
+Relatórios
+
+Opção de impulsionamento
+
+
+Criar termos de anúncios inspirados na Meta Ads (padrões de ética, restrições de conteúdo, responsabilidade do anunciante, etc.).
+
+
+
+---
+
+3. Funcionalidades para Lost & Found
+
+Criar sistema de tags editáveis para pets perdidos (ex: #encontrado, #urgente, #recompensa, etc.).
+
+Integrar esses posts com destaque em páginas de alto tráfego (como feed principal e stories).
+
+
+
+---
+
+4. Sistema de Pontuação e Engajamento
+
+Criar um sistema de gamificação por níveis de interação:
+
+Curtidas, comentários, postagens, denúncias, atualizações de perfil, mensagens.
+
+Cada nível desbloqueia distintivos ou benefícios (ex: prioridade de visibilidade, selo de confiança, etc.).
+
+
+
+
+---
+
+5. Idioma e Acessibilidade
+
+Criar uma opção de troca de idioma (ex: Português/Inglês) no menu de perfil.
+
+Todos os textos e botões devem ser preenchidos com informações úteis e direcionamentos claros, com suporte multilíngue.
+
+
+
+---
+
+6. Pagamentos e Monetização
+
+Configurar forma de pagamento para:
+
+Impulsionamento de anúncios
+
+Doações para ONGs parceiras
+
+Upgrade de contas (ex: conta Pro, ONG verificada, etc.)
+
+
+Pode utilizar integração com Stripe, MercadoPago ou Pix.
+
+
+
+---
+
+7. Design
+
+Deixar o app totalmente minimalista, mas sem mudar a posição dos elementos já existentes.
+
+Tipografia limpa
+
+Cores neutras com destaque para identidade visual do "YaoPets"
+
+Remover excesso de ícones ou sombras
+
+
+
+
+---
+
+Observações finais:
+
+Certifique-se de que todas as páginas tenham informações úteis e direcionamento.
+
+A performance e segurança devem ser mantidas como prioridade, especialmente com integração de login e pagamentos.
+
+
+
+---
+
+Se quiser, posso agora gerar o código base disso em Flutter, React ou HTML, ou um plano de execução por etapas. Deseja seguir por qual caminho?

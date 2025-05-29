@@ -1,0 +1,92 @@
+<form onsubmit="event.preventDefault(); submitPetForm()">
+  <div class="form-group">
+    <label for="petName">Nome do pet</label>
+    <input type="text" id="petName" name="petName" required>
+  </div>
+  
+  <div class="form-group">
+    <label for="petSpecies">Espécie</label>
+    <select id="petSpecies" name="petSpecies">
+      <option value="dog">Cachorro</option>
+      <option value="cat">Gato</option>
+      <option value="other">Outro</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="petSize">Porte</label>
+    <select id="petSize" name="petSize">
+      <option value="small">Pequeno</option>
+      <option value="medium">Médio</option>
+      <option value="large">Grande</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="petAge">Idade</label>
+    <select id="petAge" name="petAge">
+      <option value="puppy">Filhote</option>
+      <option value="adult">Adulto</option>
+      <option value="senior">Idoso</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="petLocation">Localização</label>
+    <input type="text" id="petLocation" name="petLocation" required>
+  </div>
+  
+  <div class="form-group">
+    <label for="petDescription">Descrição</label>
+    <textarea id="petDescription" name="petDescription" required></textarea>
+  </div>
+  
+  <div class="form-group">
+    <label for="petImage">Imagem</label>
+    <input type="file" id="petImage" name="petImage">
+  </div>
+  
+  <div class="form-group">
+    <label for="contactPhone">Telefone para contato (opcional)</label>
+    <input type="text" id="contactPhone" name="contactPhone">
+  </div>
+  
+  <button type="submit">Cadastrar</button>
+</form>
+
+<script>
+function submitPetForm() {
+  const form = document.querySelector('form');
+  const formData = new FormData(form);
+  
+  // Garantir que o content não seja nulo
+  if (!formData.get('petDescription')) {
+    formData.set('petDescription', 'Pet para adoção');
+  }
+  
+  // Adicionar campo de content explicitamente
+  formData.append('content', formData.get('petDescription'));
+  formData.append('postType', 'pet-donation');
+  
+  fetch('/api/posts', {
+    method: 'POST',
+    body: formData,
+    credentials: 'include'
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Falha ao cadastrar pet');
+    }
+    return response.json();
+  })
+  .then(data => {
+    alert('Pet cadastrado com sucesso!');
+    // Redirecionar ou atualizar a página
+    window.location.reload();
+  })
+  .catch(error => {
+    console.error('Erro:', error);
+    alert('Erro ao cadastrar pet. Por favor, tente novamente.');
+  });
+}
+</script>

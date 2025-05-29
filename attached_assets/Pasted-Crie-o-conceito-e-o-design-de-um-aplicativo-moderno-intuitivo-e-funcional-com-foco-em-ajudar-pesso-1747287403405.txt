@@ -1,0 +1,110 @@
+Crie o conceito e o design de um aplicativo moderno, intuitivo e funcional, com foco em ajudar pessoas e comunidades a encontrar pets perdidos, doar animais e itens para pets, e colaborar na saúde e resgate de animais abandonados ou de tutores em situação de vulnerabilidade.
+
+🧩 Funcionalidades e Seções do App
+1. 🟢 Tela de Cadastro e Login
+
+Suporte a login com Google, Facebook, LinkedIn e e-mail/senha
+
+Campos obrigatórios: nome, cidade, tipo de usuário (tutor, doador, voluntário, veterinário)
+
+Estilo visual: moderno e amigável, com ícones das redes sociais
+
+2. 🐶 Cadastro de Pets Perdidos e Encontrados
+
+Tutores podem cadastrar pets como “🐾 Perdido”
+
+Campos: nome, raça, cor, porte, última localização (com mapa), características, contato
+
+Outros usuários podem cadastrar pets como “🔎 Encontrado / procura-se dono”
+
+Campos: raça, cor, porte, localização, condição do animal, foto
+
+Botão “✅ Encontrado” para encerrar o caso
+
+Gera notificações e mensagem automática de agradecimento
+
+3. 🧸 Área de Doações
+
+Doação de animais para adoção e itens (ração, medicamentos, brinquedos etc.)
+
+Campos: tipo, descrição, localização, imagem, contato
+
+Feed visual em cards com filtros por localização e tipo de item
+
+4. 🐾 Identificação Completa dos Pets nas Postagens
+
+Campos obrigatórios: raça, cor(es), porte, localização, fotos, comportamento
+
+Interface com destaque para fotos e detalhes essenciais do pet
+
+5. 📍 Localização Geográfica
+
+Todas as postagens são geolocalizadas (uso de mapa interativo)
+
+Filtros por: cidade, bairro, tipo de post (perdido, achado, doação), raça, cor, porte
+
+6. 📬 Chat e Notificações
+
+Chat direto entre usuários (tutores, doadores, adotantes)
+
+Notificações para:
+
+Mudança de status do pet
+
+Novos posts próximos
+
+Atualizações de vaquinhas
+
+7. 💬 Interação Comunitária
+
+Curtidas, comentários e marcações em postagens
+
+Engajamento estilo rede social para criar senso de comunidade
+
+8. 💰 Ajuda Veterinária Comunitária
+
+Área onde veterinários se cadastram com nome, CRMV, especialidades, localização e foto
+
+Usuários podem criar pedidos de ajuda:
+
+Para pets de rua ou de baixa renda
+
+Com vaquinha pública ou privada
+
+Veterinários enviam cotações
+
+Comunidade contribui via PIX ou cartão
+
+Plataforma cobra taxa de serviço (%)
+
+9. 💸 Sistema de Boost (Anúncio Patrocinado)
+
+Pagamento para destacar posts no feed
+
+Post com selo visual e prioridade no algoritmo
+
+Notificações automáticas para usuários próximos
+
+🎨 Design e UX/UI
+Estilo visual: inspirado no Instagram (cards, feed rolável, ícones grandes)
+
+Interface acessível, responsiva e limpa
+
+Navegação intuitiva com ícones e filtros rápidos
+
+Cores suaves com destaque para botões de ação
+
+📦 Modelo de Banco de Dados (resumo)
+Usuários: id, nome, tipo, e-mail, login social, localização, foto
+
+Pets: id, tipo, status, nome, raça, porte, cor, localização, descrição, donoId
+
+Itens: id, tipo, descrição, foto, localização, doadorId
+
+Veterinários: id, nome, CRMV, especialidades, localização, foto
+
+Atendimentos: petId, solicitanteId, vetId, descrição, cotação, valor arrecadado
+
+Mensagens: senderId, receiverId, texto, timestamp
+
+Notificações: userId, tipo, texto, postId

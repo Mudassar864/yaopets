@@ -1,0 +1,80 @@
+ campo de cartão aparece com ícone de "imagem quebrada", o que significa que o CardElement não conseguiu carregar seu iframe interno.
+
+✅ Diagnóstico:
+O Stripe Elements está tentando injetar um iframe, mas:
+
+Está bloqueado pelo CSP (Content Security Policy), ou
+
+O stripe.js não foi carregado corretamente, ou
+
+O iframe está sendo modificado ou estilizado de forma incorreta, ou
+
+Você está tentando renderizar o Stripe em um ambiente onde ele não suporta iframes (ex: sandboxed iframe do Replit).
+
+✅ Solução passo a passo
+1. Verifique se você está usando loadStripe corretamente
+ts
+Copiar
+Editar
+import { loadStripe } from "@stripe/stripe-js";
+const stripePromise = loadStripe("pk_test_..."); // sua chave pública de teste
+Se estiver usando import.meta.env.VITE_..., teste copiar a chave diretamente pra garantir que o ambiente está certo.
+
+2. Envolva seu form em <Elements stripe={...}>
+tsx
+Copiar
+Editar
+import { Elements } from '@stripe/react-stripe-js';
+import CheckoutForm from './CheckoutForm';
+
+<Elements stripe={stripePromise}>
+  <CheckoutForm />
+</Elements>
+3. Confirme que o CardElement está presente e visível
+tsx
+Copiar
+Editar
+import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+<CardElement options={{
+  style: {
+    base: {
+      fontSize: "16px",
+      color: "#32325d",
+      '::placeholder': {
+        color: "#a0aec0"
+      }
+    },
+    invalid: {
+      color: "#fa755a"
+    }
+  }
+}} />
+⚠️ Importante: Verifique que nenhum overflow: hidden, display: none ou height: 0px esteja no elemento pai, pois isso impede que o Stripe monte seu iframe.
+
+4. Teste em ambiente fora do Replit
+O Replit às vezes bloqueia iframes externos, mesmo com stripe.js, o que pode causar esse erro de renderização visual.
+
+✅ Teste localmente com:
+
+bash
+Copiar
+Editar
+npm run dev
+ou
+
+✅ Teste no Vercel / Netlify para confirmar.
+
+5. Verifique console por este erro:
+Abra o DevTools → Console e veja se aparece algum erro como:
+
+pgsql
+Copiar
+Editar
+Refused to display 'https://js.stripe.com/' in a frame because it set 'X-Frame-Options' to 'sameorigin'.
+ou
+
+css
+Copiar
+Editar
+Mixed Content: The page at 'http://localhost:3000' was loaded over HTTP, but requested an insecure frame 'https://js.stripe.com/...'

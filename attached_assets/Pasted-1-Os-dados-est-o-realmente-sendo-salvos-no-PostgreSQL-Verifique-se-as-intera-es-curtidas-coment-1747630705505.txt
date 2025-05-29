@@ -1,0 +1,79 @@
+1. Os dados estão realmente sendo salvos no PostgreSQL?
+Verifique se as interações (curtidas, comentários etc.) estão sendo inseridas nas tabelas.
+
+Você pode fazer isso com um cliente como o pgAdmin, DBeaver, ou até comandos SQL diretos:
+
+sql
+Copiar
+Editar
+SELECT * FROM curtidas;
+SELECT * FROM comentarios;
+SELECT * FROM favoritos;
+Se essas tabelas estiverem vazias após interações, o erro está no backend (as rotas não estão salvando corretamente).
+
+✅ 2. O backend está recebendo e processando as requisições corretamente?
+Verifique os logs do seu backend (Express).
+
+Use console.log() para ver se os dados estão chegando.
+
+Exemplo de rota para curtir um post:
+
+js
+Copiar
+Editar
+app.post("/api/posts/:id/like", async (req, res) => {
+  const postId = req.params.id;
+  const userId = req.body.userId;
+
+  try {
+    await db.query("INSERT INTO curtidas (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+    res.status(200).json({ message: "Post curtido com sucesso" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erro ao curtir post" });
+  }
+});
+Se não houver INSERT, os dados não vão para o banco — logo, somem ao sair da página.
+
+🔁 3. Você está carregando os dados do banco quando a página é renderizada?
+O frontend precisa buscar os dados salvos sempre que o componente é carregado.
+
+Exemplo com React (useEffect):
+
+js
+Copiar
+Editar
+useEffect(() => {
+  fetch(`/api/posts/${postId}`, { credentials: 'include' })
+    .then(res => res.json())
+    .then(data => {
+      setCurtidas(data.curtidas);
+      setComentarios(data.comentarios);
+    });
+}, [postId]);
+🖼️ 4. E as imagens?
+Se elas somem, pode ser que:
+
+Você não esteja salvando o caminho no banco, ou
+
+Os arquivos não estejam sendo armazenados em lugar algum (nem no sistema de arquivos nem em um bucket tipo S3).
+
+Verifique:
+
+Se o backend salva o caminho da imagem na tabela.
+
+Se o arquivo realmente está salvo (ex: uploads/image123.png).
+
+Se você usa algo como express.static() para servir os arquivos.
+
+✅ Checklist para resolver
+ Verifique se os dados estão sendo inseridos no PostgreSQL.
+
+ Verifique se há erro no backend nas rotas de inserção.
+
+ Garanta que o frontend busca os dados do banco quando carrega a página.
+
+ Confirme se as imagens são salvas e os caminhos registrados.
+
+ Veja se os dados estão sendo salvos com a autenticação correta (usuário logado?).
+

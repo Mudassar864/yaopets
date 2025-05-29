@@ -1,0 +1,94 @@
+Você quer:
+
+Que o formulário em /new-pet salve os dados no mesmo banco/tabela/lógica que o /create-post.
+
+Que os dados preenchidos no /new-pet apareçam na /donations.
+
+Que as informações completas, incluindo a imagem, apareçam corretamente na listagem de /donations.
+
+❌ Problemas aparentes (com base na sua descrição):
+O componente de /donations está exibindo algo (ou seja, a renderização está ocorrendo), mas sem dados.
+
+A imagem e os textos não estão vindo ou sendo processados corretamente.
+
+✅ Etapas para verificar e corrigir:
+1. Verifique se os dados do formulário estão realmente sendo salvos
+No seu backend (/new-pet):
+
+Certifique-se de que o req.body e req.file (caso use multer para imagem) estão sendo capturados corretamente.
+
+O dado salvo deve ter os campos compatíveis com o que /create-post usa: content, mediaUrl, visibility, etc.
+
+Exemplo de salvamento no backend:
+
+ts
+Copiar
+Editar
+const result = await db.insert(posts).values({
+  userId: user.id,
+  content: formData.description, // ou outro campo do form
+  mediaUrl: imageUrlFromMulter, // imagem salva
+  visibility: "PUBLIC",
+  category: "DONATION", // use uma categoria para separar
+});
+Certifique-se de que você esteja salvando como se fosse um "post", e que o campo da imagem (mediaUrl) realmente esteja com a URL do arquivo salvo.
+
+2. Verifique o componente /donations
+Você provavelmente faz algo como:
+
+tsx
+Copiar
+Editar
+const posts = await getPosts({ category: "DONATION" });
+
+return posts.length === 0 ? (
+  <p>Nenhum pet cadastrado para adoção no momento.</p>
+) : (
+  posts.map((post) => (
+    <Card key={post.id}>
+      <img src={post.mediaUrl} />
+      <p>{post.content}</p>
+    </Card>
+  ))
+);
+⚠️ Se mediaUrl estiver null ou incorreto, a imagem não aparece.
+
+3. Verifique se a imagem está sendo salva corretamente
+Se estiver usando multer, o caminho precisa estar disponível publicamente. Exemplo:
+
+ts
+Copiar
+Editar
+app.use("/uploads", express.static("uploads"));
+E no frontend:
+
+tsx
+Copiar
+Editar
+<img src={`https://yaopets.lat/uploads/${post.mediaUrl}`} />
+4. Verifique o formato do FormData no envio
+Se você estiver usando react-hook-form, verifique se o FormData está assim:
+
+ts
+Copiar
+Editar
+const formData = new FormData();
+formData.append("description", data.description);
+formData.append("file", data.image[0]); // se `image` for o input de arquivo
+E o fetch:
+
+ts
+Copiar
+Editar
+await fetch("/api/new-pet", {
+  method: "POST",
+  body: formData,
+  credentials: "include",
+});
+✅ Resumo do que revisar:
+Etapa	Verificar
+1	Dados estão sendo salvos na mesma estrutura do post (/create-post)?
+2	O campo mediaUrl está sendo preenchido corretamente com o caminho da imagem?
+3	A imagem está acessível publicamente (uploads/)?
+4	O componente /donations está renderizando corretamente post.content e post.mediaUrl?
+5	Você está filtrando por categoria (DONATION) no backend?

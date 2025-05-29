@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for YaoPets application deployment on EC2'
+
+Parameters:
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.medium
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t3.micro
+      - t3.small
+      - t3.medium
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+  SSHLocation:
+    Description: IP address range that can SSH to the EC2 instance
+    Type: String
+    Default: 0.0.0.0/0
+  DBName:
+    Description: PostgreSQL database name
+    Type: String
+    Default: yaopets
+  DBUser:
+    Description: PostgreSQL database username
+    Type: String
+    Default: yaopets_user
+  DBPassword:
+    Description: PostgreSQL database password
+    Type: String
+    NoEcho: true
+  RepositoryURL:
+    Description: URL of the Git repository containing your application
+    Type: String
+    Default: https://github.com/yourusername/yaopets.git
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH, HTTP, and HTTPS access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+      KeyName: !Ref KeyName
+      ImageId: ami-0261755bbcb8c4a84  # Ubuntu 22.04 LTS (us-east-1)
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Update system packages
+          apt-get update
+          apt-get upgrade -y
+
+          # Install Node.js and required dependencies
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs postgresql postgresql-contrib nginx git certbot python3-certbot-nginx
+
+          # Install PM2 globally
+          npm install -g pm2
+
+          # Create app directory and clone repository
+          mkdir -p /home/ubuntu/yaopets
+          git clone ${RepositoryURL} /home/ubuntu/yaopets
+          cd /home/ubuntu/yaopets
+
+          # Set up PostgreSQL
+          sudo -u postgres psql -c "CREATE USER ${DBUser} WITH PASSWORD '${DBPassword}';"
+          sudo -u postgres psql -c "CREATE DATABASE ${DBName} OWNER ${DBUser};"
+          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DBName} TO ${DBUser};"
+
+          # Configure environment
+          cat > /home/ubuntu/yaopets/.env <<EOF
+          DATABASE_URL=postgresql://${DBUser}:${DBPassword}@localhost:5432/${DBName}
+          NODE_ENV=production
+          PORT=5000
+          EOF
+
+          # Install dependencies and build
+          cd /home/ubuntu/yaopets
+          npm install
+          npm run build
+
+          # Configure PM2
+          pm2 start npm --name "yaopets" -- start
+          pm2 startup
+          env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+          pm2 save
+
+          # Configure Nginx
+          cat > /etc/nginx/sites-available/yaopets <<EOF
+          server {
+              listen 80;
+              server_name _;
+
+              location / {
+                  proxy_pass http://localhost:5000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_cache_bypass \$http_upgrade;
+              }
+
+              # Larger file uploads
+              client_max_body_size 10M;
+          }
+          EOF
+
+          ln -s /etc/nginx/sites-available/yaopets /etc/nginx/sites-enabled/
+          nginx -t
+          systemctl restart nginx
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref WebServerInstance
+
+Outputs:
+  WebsiteURL:
+    Description: URL for the website
+    Value: !Sub http://${ElasticIP}
+  SSHAccess:
+    Description: SSH command for accessing the instance
+    Value: !Sub ssh -i ${KeyName}.pem ubuntu@${ElasticIP}
+  DatabaseURL:
+    Description: Database connection string
+    Value: !Sub postgresql://${DBUser}:${DBPassword}@localhost:5432/${DBName}

@@ -1,0 +1,86 @@
+Para resolver isso, aqui vai um checklist exato:
+1. Backend: Salvando corretamente os dados
+Você precisa garantir que o salvamento inclua todos os dados do formulário.
+
+Exemplo completo para o backend (Express + Multer + Drizzle):
+
+ts
+Copiar
+Editar
+import express from "express";
+import multer from "multer";
+import { db } from "@/lib/db";
+import { posts } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+
+const upload = multer({ dest: "uploads/" });
+
+app.post("/api/new-pet", upload.single("file"), async (req, res) => {
+  const { description, species, size, age, location } = req.body;
+  const file = req.file;
+
+  const mediaUrl = file ? `/uploads/${file.filename}` : null;
+
+  await db.insert(posts).values({
+    content: description || "Pet para adoção",
+    mediaUrl,
+    visibility: "PUBLIC",
+    category: "DONATION",
+    metadata: {
+      species,
+      size,
+      age,
+      location,
+    },
+    userId: req.user?.id ?? "anon", // ou o ID real do usuário autenticado
+  });
+
+  res.status(200).json({ success: true });
+});
+2. Frontend: Enviando FormData corretamente
+Verifique se está usando react-hook-form + FormData para enviar tudo corretamente:
+
+ts
+Copiar
+Editar
+const formData = new FormData();
+formData.append("description", data.description);
+formData.append("species", data.species);
+formData.append("size", data.size);
+formData.append("age", data.age);
+formData.append("location", data.location);
+formData.append("file", data.image[0]); // importante: `image` tem que ser um input do tipo `file`
+
+await fetch("/api/new-pet", {
+  method: "POST",
+  body: formData,
+  credentials: "include",
+});
+3. Página /donations: Renderizando os dados corretos
+Certifique-se de que você está buscando os posts com categoria "DONATION" e exibindo os campos salvos:
+
+tsx
+Copiar
+Editar
+{posts.map((post) => (
+  <div key={post.id} className="card">
+    {post.mediaUrl && (
+      <img src={post.mediaUrl} alt="Pet" className="w-full h-auto rounded" />
+    )}
+    <h2>{post.content}</h2>
+    <p><strong>Espécie:</strong> {post.metadata?.species || "Não especificado"}</p>
+    <p><strong>Porte:</strong> {post.metadata?.size || "Não especificado"}</p>
+    <p><strong>Idade:</strong> {post.metadata?.age || "Não especificado"}</p>
+    <p><strong>Localização:</strong> {post.metadata?.location || "Não informada"}</p>
+    <button>Adotar</button>
+  </div>
+))}
+🧪 Teste rápido para debug:
+Log no backend (console.log(req.body, req.file)) → veja se os dados estão vindo.
+
+Verifique no banco de dados → veja se mediaUrl, species, etc. estão de fato salvos.
+
+Veja no console do navegador (F12 > Network) → se o POST /new-pet está enviando os dados certinhos.
+
+Abra /uploads/{nome-do-arquivo} no navegador → veja se a imagem aparece.
+

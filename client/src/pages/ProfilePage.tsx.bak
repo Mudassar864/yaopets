@@ -1,0 +1,1200 @@
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import Header from "@/components/layout/Header";
+import BottomNavigation from "@/components/layout/BottomNavigation";
+import CreatePostModal from "@/components/modals/CreatePostModal";
+import GamificationInfo from "@/components/user/GamificationInfo";
+import { useAuth } from "@/hooks/useAuth";
+import { generateInitials } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { ExternalLink, Edit2, Check, X, UserPlus, UserMinus, MessageCircle } from "lucide-react";
+
+export default function ProfilePage() {
+  const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
+  const { user, logout } = useAuth();
+  const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
+  const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [isEditingWebsite, setIsEditingWebsite] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingCity, setIsEditingCity] = useState(false);
+  const [newBio, setNewBio] = useState('');
+  const [newWebsite, setNewWebsite] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newCity, setNewCity] = useState('');
+  const [activeView, setActiveView] = useState<'posts' | 'followers' | 'following' | 'friends'>('posts');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  // Determine if viewing own profile or another user's
+  const isOwnProfile = !id || (user && parseInt(id) === user.id);
+  
+  // Get profile data
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    queryKey: [isOwnProfile ? "/api/auth/me" : `/api/users/${id}`],
+  });
+
+  // Get user's pets
+  const { data: pets, isLoading: petsLoading } = useQuery({
+    queryKey: ["/api/pets", isOwnProfile ? { ownerId: user?.id } : { ownerId: id }],
+  });
+
+  // Get user's posts
+  const { data: posts, isLoading: postsLoading } = useQuery({
+    queryKey: ["/api/posts", isOwnProfile ? { userId: user?.id } : { userId: id }],
+    enabled: false, // Disable this query as we're going to merge multiple endpoints
+  });
+
+  // Get user's pets, donations, and vet help requests
+  const { data: userPets = [] } = useQuery({
+    queryKey: [`/api/pets?${isOwnProfile ? `ownerId=${user?.id}` : `ownerId=${id}`}`],
+  });
+
+  const { data: userDonations = [] } = useQuery({
+    queryKey: [`/api/donations?${isOwnProfile ? `donorId=${user?.id}` : `donorId=${id}`}`],
+  });
+
+  const { data: userVetHelps = [] } = useQuery({
+    queryKey: [`/api/vet-help?${isOwnProfile ? `requesterId=${user?.id}` : `requesterId=${id}`}`],
+  });
+  
+  // Get relationship counts
+  const profileUserId = isOwnProfile ? user?.id : parseInt(id as string);
+  
+  const { data: relationshipCounts, isLoading: relationshipsLoading } = useQuery({
+    queryKey: [`/api/users/${profileUserId}/relationship-counts`],
+    enabled: !!profileUserId,
+  });
+  
+  // Check if logged in user follows this profile user
+  const { data: followingStatus, isLoading: followStatusLoading } = useQuery({
+    queryKey: [`/api/users/${user?.id}/check-following/${id}`],
+    enabled: !isOwnProfile && !!user?.id && !!id,
+  });
+  
+  // Mutation to follow a user
+  const followUser = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Você precisa estar logado para seguir alguém");
+      const response = await apiRequest('POST', `/api/users/${user.id}/follow/${id}`);
+      if (!response.ok) {
+        throw new Error('Falha ao seguir usuário');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}/check-following/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${profileUserId}/relationship-counts`] });
+      toast({
+        title: "Sucesso",
+        description: "Você começou a seguir este usuário",
+        variant: "default"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível seguir este usuário. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+  
+  // Mutation to unfollow a user
+  const unfollowUser = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Você precisa estar logado para deixar de seguir alguém");
+      const response = await apiRequest('POST', `/api/users/${user.id}/unfollow/${id}`);
+      if (!response.ok) {
+        throw new Error('Falha ao deixar de seguir usuário');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}/check-following/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${profileUserId}/relationship-counts`] });
+      toast({
+        title: "Sucesso",
+        description: "Você deixou de seguir este usuário",
+        variant: "default"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível deixar de seguir este usuário. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const isLoading = profileLoading || petsLoading || postsLoading || relationshipsLoading;
+  
+  // Mutation for uploading profile photo
+  const updateProfilePhoto = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await apiRequest('PATCH', `/api/users/${user?.id}`, formData, true);
+      if (!response.ok) {
+        throw new Error('Falha ao atualizar foto de perfil');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      toast({
+        title: "Foto atualizada",
+        description: "Sua foto de perfil foi atualizada com sucesso!",
+        variant: "default"
+      });
+      setIsPhotoDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar sua foto. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+  
+  // Handle file upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const formData = new FormData();
+      formData.append('profileImage', file);
+      updateProfilePhoto.mutate(formData);
+    }
+  };
+
+  // Combine all posts for the grid
+  const getAllUserPosts = () => {
+    const allPosts = [];
+    
+    // Add pets
+    if (userPets && Array.isArray(userPets)) {
+      allPosts.push(...userPets.map((pet: any) => ({
+        id: pet.id,
+        type: 'pet',
+        status: pet.status,
+        image: pet.photos?.[0],
+        createdAt: pet.createdAt
+      })));
+    }
+    
+    // Add donations
+    if (userDonations && Array.isArray(userDonations)) {
+      allPosts.push(...userDonations.map((donation: any) => ({
+        id: donation.id,
+        type: 'donation',
+        status: 'donation',
+        image: donation.photos?.[0],
+        createdAt: donation.createdAt
+      })));
+    }
+    
+    // Add vet help requests
+    if (userVetHelps && Array.isArray(userVetHelps)) {
+      allPosts.push(...userVetHelps.map((vetHelp: any) => ({
+        id: vetHelp.id,
+        type: 'vet_help',
+        status: 'vet_help',
+        image: vetHelp.photos?.[0],
+        createdAt: vetHelp.createdAt
+      })));
+    }
+    
+    // Sort by creation date (newest first)
+    return allPosts.sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
+  const handleBack = () => {
+    setLocation('/');
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation('/');
+  };
+  
+  // Mutations for updating profile bio and website
+  const updateProfile = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', `/api/users/${user?.id}`, data);
+      if (!response.ok) {
+        throw new Error('Falha ao atualizar perfil');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      toast({
+        title: "Perfil atualizado",
+        description: "Suas informações foram atualizadas com sucesso!",
+        variant: "default"
+      });
+      // Reset all editing states
+      setIsEditingBio(false);
+      setIsEditingWebsite(false);
+      setIsEditingName(false);
+      setIsEditingCity(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar seu perfil. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  });
+  
+  // Handle bio editing
+  const handleEditBio = () => {
+    setNewBio(profileData?.bio || '');
+    setIsEditingBio(true);
+  };
+  
+  const handleSaveBio = () => {
+    updateProfile.mutate({ bio: newBio });
+  };
+  
+  // Handle website editing
+  const handleEditWebsite = () => {
+    setNewWebsite(profileData?.website || '');
+    setIsEditingWebsite(true);
+  };
+  
+  const handleSaveWebsite = () => {
+    updateProfile.mutate({ website: newWebsite });
+  };
+  
+  // Handle name editing
+  const handleEditName = () => {
+    setNewName(profileData?.name || '');
+    setIsEditingName(true);
+  };
+  
+  const handleSaveName = () => {
+    updateProfile.mutate({ name: newName });
+  };
+  
+  // Handle city editing
+  const handleEditCity = () => {
+    setNewCity(profileData?.city || '');
+    setIsEditingCity(true);
+  };
+  
+  const handleSaveCity = () => {
+    updateProfile.mutate({ city: newCity });
+  };
+  
+  // Handle view changes
+  const handleViewChange = (view: 'posts' | 'followers' | 'following' | 'friends') => {
+    setActiveView(view);
+  };
+  
+  // Handle follow/unfollow
+  const handleFollowToggle = () => {
+    if (followingStatus?.isFollowing) {
+      unfollowUser.mutate();
+    } else {
+      followUser.mutate();
+    }
+  };
+  
+  // Handle message user
+  const handleMessageUser = () => {
+    // Navigate to conversation with this user
+    setLocation(`/messages/${id}`);
+  };
+
+  const getUserTypeLabel = (type: string) => {
+    switch (type) {
+      case 'tutor':
+        return 'Tutor';
+      case 'doador':
+        return 'Doador';
+      case 'voluntário':
+        return 'Voluntário';
+      case 'veterinário':
+        return 'Veterinário';
+      default:
+        return type;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'lost':
+        return 'pets';
+      case 'found':
+        return 'pets';
+      case 'adoption':
+        return 'pets';
+      case 'donation':
+        return 'volunteer_activism';
+      case 'vet_help':
+        return 'medical_services';
+      default:
+        return 'pets';
+    }
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'lost':
+        return 'bg-destructive';
+      case 'found':
+        return 'bg-warning';
+      case 'adoption':
+        return 'bg-secondary';
+      case 'donation':
+        return 'bg-success';
+      case 'vet_help':
+        return 'bg-primary';
+      default:
+        return 'bg-primary';
+    }
+  };
+
+  return (
+    <div className="app-container">
+      {/* Header */}
+      <Header 
+        title={isOwnProfile ? "Meu Perfil" : "Perfil"} 
+        showFilters={false}
+        showBack={!isOwnProfile}
+        onBack={handleBack}
+      />
+      
+      {/* Main Content */}
+      <main className="pb-16">
+        {isLoading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-neutral-600">Carregando perfil...</p>
+          </div>
+        ) : profileData ? (
+          <>
+            {/* Se estiver visualizando seguidores */}
+            {activeView === 'followers' && (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Seguidores</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleViewChange('posts')}
+                  >
+                    Voltar
+                  </Button>
+                </div>
+                
+                {/* Lista de seguidores (dados simulados) */}
+                <div className="space-y-4">
+                  {[
+                    { id: 1, name: 'Ana Silva', city: 'São Paulo', profileImage: '' },
+                    { id: 2, name: 'João Oliveira', city: 'Rio de Janeiro', profileImage: '' },
+                    { id: 3, name: 'Carla Santos', city: 'Belo Horizonte', profileImage: '' }
+                  ].map((user) => (
+                    <div 
+                      key={user.id}
+                      className="flex items-center justify-between p-3 bg-white rounded-lg shadow"
+                    >
+                      <div className="flex items-center">
+                        <Avatar className="h-12 w-12 mr-3">
+                          {user.profileImage ? (
+                            <AvatarImage 
+                              src={user.profileImage}
+                              className="h-full w-full object-cover" 
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-neutral-200 text-neutral-700">
+                              {generateInitials(user.name || 'User')}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                        <div>
+                          <h5 className="font-medium">{user.name}</h5>
+                          <p className="text-xs text-neutral-500">{user.city || 'Localização não informada'}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setLocation(`/profile/${user.id}`)}
+                      >
+                        Ver perfil
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Se estiver visualizando seguindo */}
+            {activeView === 'following' && (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Seguindo</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleViewChange('posts')}
+                  >
+                    Voltar
+                  </Button>
+                </div>
+                
+                {/* Lista de seguindo (dados simulados) */}
+                <div className="space-y-4">
+                  {[
+                    { id: 4, name: 'Pedro Costa', city: 'Salvador', profileImage: '' },
+                    { id: 5, name: 'Mariana Lima', city: 'Fortaleza', profileImage: '' }
+                  ].map((user) => (
+                    <div 
+                      key={user.id}
+                      className="flex items-center justify-between p-3 bg-white rounded-lg shadow"
+                    >
+                      <div className="flex items-center">
+                        <Avatar className="h-12 w-12 mr-3">
+                          {user.profileImage ? (
+                            <AvatarImage 
+                              src={user.profileImage}
+                              className="h-full w-full object-cover" 
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-neutral-200 text-neutral-700">
+                              {generateInitials(user.name || 'User')}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                        <div>
+                          <h5 className="font-medium">{user.name}</h5>
+                          <p className="text-xs text-neutral-500">{user.city || 'Localização não informada'}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setLocation(`/profile/${user.id}`)}
+                      >
+                        Ver perfil
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Se estiver visualizando amigos */}
+            {activeView === 'friends' && (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Amigos</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleViewChange('posts')}
+                  >
+                    Voltar
+                  </Button>
+                </div>
+                
+                {/* Lista de amigos (dados simulados) */}
+                <div className="space-y-4">
+                  {[
+                    { id: 2, name: 'João Oliveira', city: 'Rio de Janeiro', profileImage: '' },
+                    { id: 5, name: 'Mariana Lima', city: 'Fortaleza', profileImage: '' }
+                  ].map((user) => (
+                    <div 
+                      key={user.id}
+                      className="flex items-center justify-between p-3 bg-white rounded-lg shadow"
+                    >
+                      <div className="flex items-center">
+                        <Avatar className="h-12 w-12 mr-3">
+                          {user.profileImage ? (
+                            <AvatarImage 
+                              src={user.profileImage}
+                              className="h-full w-full object-cover" 
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-neutral-200 text-neutral-700">
+                              {generateInitials(user.name || 'User')}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                        <div>
+                          <h5 className="font-medium">{user.name}</h5>
+                          <p className="text-xs text-neutral-500">{user.city || 'Localização não informada'}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setLocation(`/profile/${user.id}`)}
+                      >
+                        Ver perfil
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Informações do perfil só aparecem quando estiver na visualização padrão (posts) */}
+            {activeView === 'posts' && (
+              <div className="p-4">
+              <div className="flex">
+                {/* Avatar section */}
+                <div className="mr-4">
+                  {isOwnProfile ? (
+                    <div 
+                      className="relative h-20 w-20 cursor-pointer"
+                      onClick={() => setIsPhotoDialogOpen(true)}
+                    >
+                      <Avatar className="h-20 w-20">
+                        {profileData?.profileImage ? (
+                          <AvatarImage 
+                            src={profileData.profileImage}
+                            alt={profileData?.name || 'User'} 
+                            className="h-full w-full object-cover" 
+                          />
+                        ) : (
+                          <AvatarFallback className="bg-neutral-200 text-neutral-700 text-2xl">
+                            {generateInitials(profileData?.name || 'User')}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <div className="absolute bottom-0 right-0 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center">
+                        <span className="material-icons text-xs">add_a_photo</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <Avatar className="h-20 w-20">
+                      {profileData?.profileImage ? (
+                        <AvatarImage 
+                          src={profileData.profileImage}
+                          alt={profileData?.name || 'User'} 
+                          className="h-full w-full object-cover" 
+                        />
+                      ) : (
+                        <AvatarFallback className="bg-neutral-200 text-neutral-700 text-2xl">
+                          {generateInitials(profileData?.name || 'User')}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                  )}
+                </div>
+                
+                {/* User info section */}
+                <div className="flex-1">
+                  {/* Nome e cidade */}
+                  <div>
+                    {isEditingName ? (
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          className="h-8 py-1 text-lg font-medium"
+                          placeholder="Nome"
+                        />
+                        <Button 
+                          size="icon" 
+                          className="h-6 w-6" 
+                          onClick={handleSaveName}
+                          disabled={updateProfile.isPending}
+                        >
+                          <Check size={14} />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="outline" 
+                          className="h-6 w-6" 
+                          onClick={() => setIsEditingName(false)}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <h3 className="text-lg font-medium text-neutral-900">{profileData?.name || 'Usuário'}</h3>
+                        {isOwnProfile && (
+                          <button 
+                            className="text-neutral-500 hover:text-primary ml-2"
+                            onClick={handleEditName}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mt-1">
+                    {isEditingCity ? (
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={newCity}
+                          onChange={(e) => setNewCity(e.target.value)}
+                          className="h-7 py-1 text-sm"
+                          placeholder="Cidade"
+                        />
+                        <Button 
+                          size="icon" 
+                          className="h-6 w-6" 
+                          onClick={handleSaveCity}
+                          disabled={updateProfile.isPending}
+                        >
+                          <Check size={14} />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="outline" 
+                          className="h-6 w-6" 
+                          onClick={() => setIsEditingCity(false)}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <p className="text-sm text-neutral-600">{profileData?.city || 'Localização não disponível'}</p>
+                        {isOwnProfile && (
+                          <button 
+                            className="text-neutral-500 hover:text-primary ml-2"
+                            onClick={handleEditCity}
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Bio e website na mesma linha horizontal */}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {/* Bio */}
+                    <div className="flex items-center">
+                      {isEditingBio ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            value={newBio}
+                            onChange={(e) => setNewBio(e.target.value)}
+                            className="h-7 py-1 text-sm max-w-[180px]"
+                            placeholder="Descrição"
+                          />
+                          <Button 
+                            size="icon" 
+                            className="h-6 w-6" 
+                            onClick={handleSaveBio}
+                            disabled={updateProfile.isPending}
+                          >
+                            <Check size={14} />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            className="h-6 w-6" 
+                            onClick={() => setIsEditingBio(false)}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <p className="text-sm text-neutral-600 line-clamp-1 max-w-[150px]">
+                            {profileData?.bio || (isOwnProfile ? "Adicione uma descrição..." : "Sem descrição")}
+                          </p>
+                          {isOwnProfile && (
+                            <button 
+                              className="text-neutral-500 hover:text-primary ml-2 flex-shrink-0"
+                              onClick={handleEditBio}
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Website */}
+                    <div className="flex items-center">
+                      {isEditingWebsite ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            value={newWebsite}
+                            onChange={(e) => setNewWebsite(e.target.value)}
+                            className="h-7 py-1 text-sm max-w-[180px]"
+                            placeholder="Link"
+                          />
+                          <Button 
+                            size="icon" 
+                            className="h-6 w-6" 
+                            onClick={handleSaveWebsite}
+                            disabled={updateProfile.isPending}
+                          >
+                            <Check size={14} />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            className="h-6 w-6" 
+                            onClick={() => setIsEditingWebsite(false)}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          {profileData?.website ? (
+                            <a 
+                              href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary flex items-center hover:underline truncate max-w-[150px]"
+                            >
+                              <ExternalLink size={12} className="mr-1 flex-shrink-0" />
+                              {profileData.website}
+                            </a>
+                          ) : (
+                            <p className="text-sm text-neutral-500">
+                              {isOwnProfile ? "Adicione um link..." : "Sem link"}
+                            </p>
+                          )}
+                          {isOwnProfile && (
+                            <button 
+                              className="text-neutral-500 hover:text-primary ml-2 flex-shrink-0"
+                              onClick={handleEditWebsite}
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-1 flex items-center text-xs text-neutral-600">
+                    <span className="material-icons text-sm mr-1">verified</span>
+                    {getUserTypeLabel(profileData?.userType || 'tutor')}
+                  </div>
+                </div>
+                
+                {isOwnProfile && (
+                  <div className="ml-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleLogout}
+                    >
+                      Sair
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-4">
+                <GamificationInfo 
+                  points={profileData.points || 0} 
+                  level={profileData.level || 'Iniciante'} 
+                  badges={profileData.achievementBadges || ['Protetor Iniciante']}
+                />
+              </div>
+              
+              {/* Bio e Website */}
+              <div className="mt-4 space-y-3">
+                {/* Bio */}
+                <div className="bg-neutral-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <h4 className="text-sm font-medium text-neutral-700">Sobre</h4>
+                    {isOwnProfile && !isEditingBio && (
+                      <button 
+                        className="text-neutral-500 hover:text-primary"
+                        onClick={handleEditBio}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isEditingBio ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Escreva algo sobre você..."
+                        value={newBio}
+                        onChange={(e) => setNewBio(e.target.value)}
+                        className="w-full text-sm"
+                        rows={3}
+                      />
+                      <div className="flex justify-end space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsEditingBio(false)}
+                        >
+                          <X size={14} className="mr-1" /> Cancelar
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={handleSaveBio}
+                          disabled={updateProfile.isPending}
+                        >
+                          <Check size={14} className="mr-1" /> Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-600">
+                      {profileData?.bio || (isOwnProfile ? "Adicione uma descrição sobre você..." : "Sem descrição")}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Website/Link */}
+                <div className="bg-neutral-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <h4 className="text-sm font-medium text-neutral-700">Link</h4>
+                    {isOwnProfile && !isEditingWebsite && (
+                      <button 
+                        className="text-neutral-500 hover:text-primary"
+                        onClick={handleEditWebsite}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isEditingWebsite ? (
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="https://seusite.com ou @instagram"
+                        value={newWebsite}
+                        onChange={(e) => setNewWebsite(e.target.value)}
+                        className="w-full text-sm"
+                      />
+                      <div className="flex justify-end space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsEditingWebsite(false)}
+                        >
+                          <X size={14} className="mr-1" /> Cancelar
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={handleSaveWebsite}
+                          disabled={updateProfile.isPending}
+                        >
+                          <Check size={14} className="mr-1" /> Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {profileData?.website ? (
+                        <a 
+                          href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary flex items-center hover:underline"
+                        >
+                          <ExternalLink size={14} className="mr-1" />
+                          {profileData.website}
+                        </a>
+                      ) : (
+                        <p className="text-sm text-neutral-500">
+                          {isOwnProfile ? "Adicione um link para seu site ou rede social..." : "Nenhum link disponível"}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Ações para perfis de outros usuários */}
+              {!isOwnProfile && user && (
+                <div className="mt-4 flex space-x-2">
+                  <Button 
+                    onClick={handleFollowToggle}
+                    variant={followingStatus?.isFollowing ? "outline" : "default"}
+                    className="flex-1"
+                    disabled={followUser.isPending || unfollowUser.isPending}
+                  >
+                    {followingStatus?.isFollowing ? (
+                      <>
+                        <UserMinus size={16} className="mr-1" />
+                        Deixar de seguir
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={16} className="mr-1" />
+                        Seguir
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={handleMessageUser}
+                  >
+                    <MessageCircle size={16} className="mr-1" />
+                    Mensagem
+                  </Button>
+                </div>
+              )}
+
+              {/* Contadores de relacionamento */}
+              <div className="mt-6 grid grid-cols-4 gap-2 text-center">
+                <div 
+                  className="bg-neutral-100 p-2 rounded-lg cursor-pointer hover:bg-neutral-200 transition"
+                  onClick={() => handleViewChange('followers')}
+                >
+                  <p className="text-lg font-bold text-primary">
+                    {relationshipCounts?.followerCount || 0}
+                  </p>
+                  <p className="text-xs text-neutral-600">Seguidores</p>
+                </div>
+                <div 
+                  className="bg-neutral-100 p-2 rounded-lg cursor-pointer hover:bg-neutral-200 transition"
+                  onClick={() => handleViewChange('following')}
+                >
+                  <p className="text-lg font-bold text-primary">
+                    {relationshipCounts?.followingCount || 0}
+                  </p>
+                  <p className="text-xs text-neutral-600">Seguindo</p>
+                </div>
+                <div 
+                  className="bg-neutral-100 p-2 rounded-lg cursor-pointer hover:bg-neutral-200 transition"
+                  onClick={() => handleViewChange('friends')}
+                >
+                  <p className="text-lg font-bold text-primary">
+                    {relationshipCounts?.friendsCount || 0}
+                  </p>
+                  <p className="text-xs text-neutral-600">Amigos</p>
+                </div>
+                <div 
+                  className="bg-neutral-100 p-2 rounded-lg cursor-pointer hover:bg-neutral-200 transition"
+                  onClick={() => handleViewChange('posts')}
+                >
+                  <p className="text-lg font-bold text-primary">
+                    {relationshipCounts?.postsCount || getAllUserPosts().length}
+                  </p>
+                  <p className="text-xs text-neutral-600">Posts</p>
+                </div>
+              </div>
+              
+              {pets && pets.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="font-medium text-neutral-900 mb-2">Meus pets</h4>
+                  <div className="flex space-x-4 overflow-x-auto scrollbar-hide pb-2">
+                    {pets.map((pet: any) => (
+                      <div key={pet.id} className="text-center">
+                        <div className="h-20 w-20 rounded-full overflow-hidden bg-neutral-100 border-2 border-primary mb-1">
+                          {pet.photos && pet.photos.length > 0 ? (
+                            <img 
+                              src={pet.photos[0]} 
+                              alt={pet.name || "Pet"} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center">
+                              <span className="material-icons text-neutral-400">pets</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium">{pet.name || "Pet"}</p>
+                      </div>
+                    ))}
+                    
+                    {isOwnProfile && (
+                      <div className="text-center">
+                        <div 
+                          className="h-20 w-20 rounded-full bg-neutral-100 border-2 border-dashed border-neutral-300 mb-1 flex items-center justify-center cursor-pointer"
+                          onClick={() => setCreatePostModalOpen(true)}
+                        >
+                          <span className="material-icons text-neutral-400">add</span>
+                        </div>
+                        <p className="text-xs font-medium text-neutral-500">Adicionar</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Profile tabs */}
+            <Tabs defaultValue="posts" className="w-full">
+              <div className="px-4 border-b border-neutral-200">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="posts">Publicações</TabsTrigger>
+                  <TabsTrigger value="saved">Salvos</TabsTrigger>
+                </TabsList>
+              </div>
+              
+              <TabsContent value="posts" className="mt-0">
+                {/* Posts grid */}
+                <div className="grid grid-cols-3 gap-1 p-1">
+                  {getAllUserPosts().map((post: any) => (
+                    <div 
+                      key={`${post.type}-${post.id}`}
+                      className="aspect-square bg-neutral-100 relative cursor-pointer"
+                      onClick={() => setLocation(`/${post.type}s/${post.id}`)}
+                    >
+                      {post.image ? (
+                        <img 
+                          src={post.image} 
+                          alt={`Post ${post.id}`} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="material-icons text-2xl text-neutral-400">
+                            {post.type === 'pet' ? 'pets' : 'volunteer_activism'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2">
+                        <span className={`material-icons text-white text-xs ${getStatusClass(post.status)} rounded-full p-0.5`}>
+                          {getStatusIcon(post.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {getAllUserPosts().length === 0 && (
+                    <div className="col-span-3 p-8 text-center">
+                      <span className="material-icons text-3xl text-neutral-300 mb-2">
+                        post_add
+                      </span>
+                      <p className="text-neutral-500">Nenhuma publicação ainda</p>
+                      {isOwnProfile && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4"
+                          onClick={() => setCreatePostModalOpen(true)}
+                        >
+                          Criar primeira publicação
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="saved" className="mt-0">
+                <div className="p-8 text-center">
+                  <span className="material-icons text-3xl text-neutral-300 mb-2">
+                    bookmark_border
+                  </span>
+                  <p className="text-neutral-500">Função em desenvolvimento</p>
+                  <p className="text-sm text-neutral-400 mt-1">
+                    Em breve você poderá salvar publicações aqui
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        ) : (
+          <div className="p-8 text-center">
+            <span className="material-icons text-4xl text-neutral-400 mb-2">error_outline</span>
+            <p className="text-neutral-600">Usuário não encontrado</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={handleBack}
+            >
+              Voltar para o início
+            </Button>
+          </div>
+        )}
+      </main>
+      
+      {/* Só exibe a navegação inferior quando não estiver visualizando listas de usuários */}
+      {isOwnProfile && activeView === 'posts' && (
+        <>
+          {/* Bottom Navigation */}
+          <BottomNavigation />
+          
+          {/* Create Post Modal */}
+          <CreatePostModal 
+            open={createPostModalOpen} 
+            onOpenChange={setCreatePostModalOpen} 
+          />
+          
+          {/* Photo Upload Dialog */}
+          <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Atualizar foto de perfil</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                <Avatar className="h-24 w-24">
+                  {profileData?.profileImage ? (
+                    <AvatarImage 
+                      src={profileData.profileImage}
+                      alt={profileData?.name || 'User'} 
+                      className="h-full w-full object-cover" 
+                    />
+                  ) : (
+                    <AvatarFallback className="bg-neutral-200 text-neutral-700 text-3xl">
+                      {generateInitials(profileData?.name || 'User')}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={updateProfilePhoto.isPending}
+                  >
+                    Escolher imagem
+                  </Button>
+                  
+                  <Button
+                    variant="default"
+                    disabled={updateProfilePhoto.isPending}
+                    onClick={() => setIsPhotoDialogOpen(false)}
+                  >
+                    {updateProfilePhoto.isPending ? "Salvando..." : "Cancelar"}
+                  </Button>
+                </div>
+                
+                {updateProfilePhoto.isPending && (
+                  <div className="mt-2 text-sm text-center text-neutral-600">
+                    <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                    Enviando foto...
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+    </div>
+  );
+}
